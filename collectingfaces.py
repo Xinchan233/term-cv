@@ -4,7 +4,7 @@
 由于外部程序需要调用它，所以不能使用相对路径
 
 用法：
-python collectingfaces.py --id 106 --imagedir /home/zhangxinchan/PycharmProjects/term-cv/images
+python collectingfaces.py --id smile --imagedir /home/zhangxinchan/PycharmProjects/term-cv/images
 
 '''
 import argparse

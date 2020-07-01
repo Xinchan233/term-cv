@@ -13,7 +13,7 @@ from oldcare.facial import FaceUtil
 dataset_path = 'images'
 output_encoding_file_path = 'models/face_recognition_hog.pickle'
 
-# grab the paths to the input images in our dataset
+# grab the paths to the input images in our datasets
 print("[INFO] quantifying faces...")
 image_paths = list(paths.list_images(dataset_path))
 
