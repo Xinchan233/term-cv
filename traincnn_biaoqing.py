@@ -47,7 +47,7 @@ image_paths = list(paths.list_images(dataset_path))  # path included
 # Flatten (reshape the data matrix)
 # convert from (13164,TARGET_IMAGE_WIDTH,TARGET_IMAGE_HEIGHT)
 # into (13164,TARGET_IMAGE_WIDTH*TARGET_IMAGE_HEIGHT)
-X = X.reshape((X.shape[0], TARGET_IMAGE_WIDTH * TARGET_IMAGE_HEIGHT))
+X = X.reshape((X.shape[0], TARGET_IMAGE_WIDTH, TARGET_IMAGE_HEIGHT, 1))
 X = X.astype("float") / 255.0  # 特征缩放，是非常重要的步骤
 
 # Show some information on memory consumption of the images
@@ -61,11 +61,11 @@ print(le.classes_)
 
 # 拆分数据集
 (X_train, X_test, y_train, y_test) = train_test_split(X, y,
-                                                      test_size=0.1,
+                                                      test_size=0.7,
                                                       random_state=42)
 
-X_train = X_train.reshape(X_train.shape[0],28,28,1)/255
-X_test = X_test.reshape(X_test.shape[0],28,28,1)/255
+#X_train = X_train.reshape(X_train.shape[0],28,28,1)/255
+#X_test = X_test.reshape(X_test.shape[0],28,28,1)/255
 
 # 第二部分：创建并训练模型
 # initialize the optimizer and model
