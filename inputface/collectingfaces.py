@@ -18,7 +18,7 @@ import shutil
 import time
 
 # 全局参数
-audio_dir = '/home/zhangxinchan/PycharmProjects/term-cv/audios'
+audio_dir = '/audios'
 
 # 控制参数
 error = 0
