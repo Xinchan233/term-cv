@@ -16,6 +16,8 @@ import os
 import time
 import subprocess
 import argparse
+import pymysql
+import datetime
 
 # 传入参数
 ap = argparse.ArgumentParser()
@@ -23,6 +25,7 @@ ap.add_argument("-f", "--filename", required=False, default='',
                 help="")
 args = vars(ap.parse_args())
 input_video = args['filename']
+flag = 1
 
 # 控制陌生人检测
 fall_timing = 0  # 计时开始
@@ -90,18 +93,30 @@ while True:
                                          time.localtime(time.time()))
 
             if difference < fall_limit_time:
+                flag = 1
                 print('[INFO] %s, 走廊, 摔倒仅出现 %.1f 秒. 忽略.'
                       % (current_time, difference))
             else:  # strangers appear
-                event_desc = '有人摔倒!!!'
-                event_location = '走廊'
-                print('[EVENT] %s, 走廊, 有人摔倒!!!' % (current_time))
-                cv2.imwrite(os.path.join(output_fall_path,
-                                         'snapshot_%s.jpg'
-                                         % (time.strftime('%Y%m%d_%H%M%S'))), image)
-                # insert into database
-                command = '%s inserting.py --event_desc %s--event_type3 - -event_location % s'% (python_path, event_desc, event_location)
-                p = subprocess.Popen(command, shell=True)
+                if (flag == 1):
+                    curr_time = datetime.datetime.now()
+                    db = pymysql.connect(host='123.57.246.9', user='root', password='199918', port=3306, db='oldcare')
+                    cursor = db.cursor()
+                    # sql语句
+                    sql = "insert into event_info(event_date,event_type,event_desc,event_location) value(now(),3,'有人摔倒!!!','走廊')"
+                    try:
+                        cursor.execute(sql)
+                        print('Successful')
+                        db.commit()
+                    except:
+                        print('Failed')
+                        db.rollback()
+                    cursor.close()
+                    db.close()
+                    flag = 0
+                    print('[EVENT] %s, 走廊, 有人摔倒!!!' % (current_time))
+                    cv2.imwrite(os.path.join(output_fall_path,
+                                             'snapshot_%s.jpg'
+                                             % (time.strftime('%Y%m%d_%H%M%S'))), image)
 
     cv2.imshow('Fall detection', image)
 
