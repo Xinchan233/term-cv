@@ -93,7 +93,6 @@ while True:
                                          time.localtime(time.time()))
 
             if difference < fall_limit_time:
-                flag = 1
                 print('[INFO] %s, 走廊, 摔倒仅出现 %.1f 秒. 忽略.'
                       % (current_time, difference))
             else:  # strangers appear
@@ -117,7 +116,8 @@ while True:
                     cv2.imwrite(os.path.join(output_fall_path,
                                              'snapshot_%s.jpg'
                                              % (time.strftime('%Y%m%d_%H%M%S'))), image)
-
+    else:
+        flag=1
     cv2.imshow('Fall detection', image)
 
     # Press 'ESC' for exiting video

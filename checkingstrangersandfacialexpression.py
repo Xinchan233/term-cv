@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 '''
 陌生人识别模型和情感分析模型的结合的主程序
-
 用法：
 python checkingstrangersandfacialexpression.py
 python checkingstrangersandfacialexpression.py --filename tests/room_01.mp4
@@ -9,6 +8,9 @@ python checkingstrangersandfacialexpression.py --filename tests/room_01.mp4
 
 # 导入包
 import argparse
+
+import pymysql
+
 from oldcare.facial import FaceUtil
 from PIL import Image, ImageDraw, ImageFont
 from oldcare.utils import fileassistant
@@ -32,7 +34,9 @@ ap.add_argument("-f", "--filename", required=False, default='',
                 help="")
 args = vars(ap.parse_args())
 input_video = args['filename']
-
+db = pymysql.connect(host='123.57.246.9', user='root', password='199918', port=3306,
+                     db='oldcare')
+cursor = db.cursor()
 # 全局变量
 facial_recognition_model_path = 'models/face_recognition_hog.pickle'
 facial_expression_model_path = 'models/face_expression.hdf5'
@@ -43,7 +47,7 @@ output_smile_path = 'supervision/smile'
 people_info_path = 'info/people_info.csv'
 facial_expression_info_path = 'info/facial_expression_info.csv'
 # your python path
-python_path = '/home/reed/anaconda3/envs/tensorflow/bin/python'
+python_path = '/home/guojiahua/anaconda3/envs/tensorflow/bin/python3.6'
 
 # 全局常量
 FACIAL_EXPRESSION_TARGET_WIDTH = 28
@@ -85,6 +89,8 @@ facial_expression_model = load_model(facial_expression_model_path)
 print('[INFO] 开始检测陌生人和表情...')
 # 不断循环
 counter = 0
+flag = 1
+flag2 = 1
 while True:
     counter += 1
     # grab the current frame
@@ -119,9 +125,7 @@ while True:
              (0, 255, 255), 1)
 
     # 处理每一张识别到的人脸
-    for ((left, top, right, bottom), name) in zip(face_location_list,
-                                                  names):
-
+    for ((left, top, right, bottom), name) in zip(face_location_list, names):
         # 将人脸框出来
         rectangle_color = (0, 0, 255)
         if id_card_to_type[name] == 'old_people':
@@ -153,12 +157,24 @@ while True:
                 else:  # strangers appear
                     event_desc = '陌生人出现!!!'
                     event_location = '房间'
-                    print('[EVENT] %s, 房间, 陌生人出现!!!'% (current_time))
-                    cv2.imwrite(os.path.join(output_stranger_path,'snapshot_%s.jpg'% (time.strftime('%Y%m%d_%H%M%S'))), frame)
+                    print('[EVENT] %s, 房间, 陌生人出现!!!'
+                          % (current_time))
+                    cv2.imwrite(os.path.join(output_stranger_path,
+                                             'snapshot_%s.jpg'
+                                             % (time.strftime('%Y%m%d_%H%M%S'))), frame)
 
-                    # insert into database
-                    command = '%s inserting.py --event_desc %s--event_type2 - -event_location % s'% (python_path, event_desc, event_location)
-            p = subprocess.Popen(command, shell=True)
+                    if (flag2 == 1):
+
+                        # sql语句
+                        sql = "insert into event_info(event_date,event_type,event_desc,event_location) value(now(),2,'陌生人出现!!!','房间')"
+                        try:
+                            cursor.execute(sql)
+                            print('Successful')
+                            db.commit()
+                        except:
+                            print('Failed')
+                            db.rollback()
+                        flag2 = 0
 
             # 开始陌生人追踪
             unknown_face_center = (int((right + left) / 2),
@@ -170,24 +186,23 @@ while True:
             direction = ''
             # face locates too left, servo need to turn right,
             # so that face turn right as well
-            if unknown_face_center[0] <one_fourth_image_center[0]:
-
+            if unknown_face_center[0] < one_fourth_image_center[0]:
                 direction = 'right'
-            elif unknown_face_center[0] >three_fourth_image_center[0]:
+            elif unknown_face_center[0] > three_fourth_image_center[0]:
                 direction = 'left'
 
             # adjust to servo
             if direction:
-                print('%d-摄像头需要 turn %s %d 度' % (counter,
-                                                 direction, ANGLE))
-
+                print('%d-摄像头需要 turn %s %d 度' % (counter, direction, ANGLE))
         else:  # everything is ok
             strangers_timing = 0
+            flag2=1
 
         # 表情检测逻辑
         # 如果不是陌生人，且对象是老人
         if name != 'Unknown' and id_card_to_type[name] == 'old_people':
             # 表情检测逻辑
+            print("检测到老人，开始识别表情")
             roi = gray[top:bottom, left:right]
             roi = cv2.resize(roi, (FACIAL_EXPRESSION_TARGET_WIDTH,
                                    FACIAL_EXPRESSION_TARGET_HEIGHT))
@@ -197,7 +212,7 @@ while True:
 
             # determine facial expression
             (neural, smile) = facial_expression_model.predict(roi)[0]
-            facial_expression_label = 'Neural'if neural > smile else 'Smile'
+            facial_expression_label = 'Neural' if neural > smile else 'Smile'
 
             if facial_expression_label == 'Smile':  # alert
                 if facial_expression_timing == 0:  # just start timing
@@ -205,56 +220,62 @@ while True:
                     facial_expression_start_time = time.time()
                 else:  # already started timing
                     facial_expression_end_time = time.time()
-                    difference = facial_expression_end_time -facial_expression_start_time
+                    difference = facial_expression_end_time - facial_expression_start_time
 
-                current_time = time.strftime('%Y-%m-%d %H:%M:%S',
-                                             time.localtime(time.time()))
-                if difference < facial_expression_limit_time:
-                    print('[INFO] %s, 房间, %s仅笑了 %.1f 秒. 忽略'
-                          % (current_time,
-                             id_card_to_name[name], difference))
-                else:  # he/she is really smiling
-                    event_desc = '%s正在笑' % (id_card_to_name[name])
-                    event_location = '房间'
-                    print('[EVENT] %s, 房间, %s正在笑.'
-                          % (current_time, id_card_to_name[name]))
-                    cv2.imwrite(os.path.join(output_smile_path,
-                                             'snapshot_%s.jpg'
-                                             % (time.strftime('%Y%m%d_%H%M%S'))), frame)
+                    current_time = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))
+                    if difference < facial_expression_limit_time:
+                        print('[INFO] %s, 房间, %s仅笑了 %.1f 秒. 忽略' % (current_time, id_card_to_name[name], difference))
+                    else:  # he/she is really smiling
+                        event_desc = '%s正在笑' % (id_card_to_name[name])
+                        event_location = '房间'
+                        print('[EVENT] %s, 房间, %s正在笑.' % (current_time, id_card_to_name[name]))
+                        cv2.imwrite(
+                            os.path.join(output_smile_path, 'snapshot_%s.jpg' % (time.strftime('%Y%m%d_%H%M%S'))),
+                            frame)
 
-                    # insert into database
-                    command = '%s inserting.py --event_desc %s--event_type0 - -event_location % s--old_people_id % d'% (python_path, event_desc,event_location, int(name))
-                    p = subprocess.Popen(command, shell=True)
-            else:
+                        if (flag == 1):
+                            # sql语句
+                            sql2 = (
+                                        "insert into event_info(event_date,event_type,event_desc,event_location) value(now(),0,'%s正在笑','房间')" % (
+                                    id_card_to_name[name]))
+                            try:
+                                cursor.execute(sql2)
+                                print('Successful')
+                                db.commit()
+                            except:
+                                print('Failed')
+                                db.rollback()
+                            flag = 0
+            else:  # everything is ok
                 facial_expression_timing = 0
 
         else:  # 如果是陌生人，则不检测表情
+            flag=1
             facial_expression_label = ''
 
-        # 人脸识别和情感分析都结束后，把表情和人名写上
-        # (同时处理中文显示问题)
-        img_PIL = Image.fromarray(cv2.cvtColor(frame,
-                                               cv2.COLOR_BGR2RGB))
+    # 人脸识别和情感分析都结束后，把表情和人名写上
+    # (同时处理中文显示问题)
+    img_PIL = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
 
-        draw = ImageDraw.Draw(img_PIL)
-        final_label = id_card_to_name[name] + ': '+ facial_expression_id_to_name[facial_expression_label] if facial_expression_label else id_card_to_name[name]
-        draw.text((left, top - 30), final_label,
-                  font=ImageFont.truetype('NotoSansCJK-Black.ttc', 40),
-                  fill=(255, 0, 0))  # linux
+    draw = ImageDraw.Draw(img_PIL)
+    final_label = id_card_to_name[name] + ': ' + facial_expression_id_to_name[
+        facial_expression_label] if facial_expression_label else id_card_to_name[name]
+    draw.text((left, top - 30), final_label,
+              font=ImageFont.truetype('NotoSansCJK-Black.ttc', 40),
+              fill=(255, 0, 0))  # linux
 
-        # 转换回OpenCV格式
-        frame = cv2.cvtColor(np.asarray(img_PIL), cv2.COLOR_RGB2BGR)
+    # 转换回OpenCV格式
+    frame = cv2.cvtColor(np.asarray(img_PIL), cv2.COLOR_RGB2BGR)
 
-        # show our detected faces along with smiling/not smiling labels
-    cv2.imshow("Checking Strangers and Ole People's Face Expression",
-               frame)
+    # show our detected faces along with smiling/not smiling labels
+    cv2.imshow("Checking Strangers and Ole People's Face Expression", frame)
 
     # Press 'ESC' for exiting video
     k = cv2.waitKey(1) & 0xff
     if k == 27:
         break
-
+cursor.close()
+db.close()
 # cleanup the camera and close any open windows
 vs.release()
 cv2.destroyAllWindows()
-

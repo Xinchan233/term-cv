@@ -232,13 +232,13 @@ while True:
                 if direction < 0 and centroid[1] < H // 2:
                     totalUp += 1
                     to.counted = True
-                    flag=1
 
                 # if the direction is positive (indicating the object
                 # is moving down) AND the centroid is below the
                 # center line, count the object
                 elif direction > 0 and centroid[1] > H // 2:
                     totalDown += 1
+                    flag=1
                     to.counted = True
 
                     current_time = time.strftime('%Y-%m-%d %H:%M:%S',
@@ -254,7 +254,7 @@ while True:
                                              db='oldcare')
                         cursor = db.cursor()
                         # sql语句
-                        sql = "insert into event_info(event_date,event_type,event_desc,event_location) value(now(),3,'有人闯入禁止区域!!!','院子')"
+                        sql = "insert into event_info(event_date,event_type,event_desc,event_location) value(now(),4,'有人闯入禁止区域!!!','院子')"
                         try:
                             cursor.execute(sql)
                             print('Successful')
