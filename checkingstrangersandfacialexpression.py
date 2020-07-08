@@ -43,6 +43,7 @@ facial_expression_model_path = 'models/face_expression.hdf5'
 
 output_stranger_path = 'supervision/strangers'
 output_smile_path = 'supervision/smile'
+output_disgust_path='supervision/disgust'
 
 people_info_path = 'info/people_info.csv'
 facial_expression_info_path = 'info/facial_expression_info.csv'
@@ -68,7 +69,7 @@ facial_expression_id_to_name = fileassistant.get_facial_expression_info(
 # 控制陌生人检测
 strangers_timing = 0  # 计时开始
 strangers_start_time = 0  # 开始时间
-strangers_limit_time = 2  # if >= 2 seconds, then he/she is a stranger.
+strangers_limit_time = 4  # if >= 2 seconds, then he/she is a stranger.
 
 # 控制情感分析
 facial_expression_timing = 0  # 计时开始
@@ -91,6 +92,7 @@ print('[INFO] 开始检测陌生人和表情...')
 counter = 0
 flag = 1
 flag2 = 1
+flag3=1
 while True:
     counter += 1
     # grab the current frame
@@ -142,7 +144,7 @@ while True:
         # 陌生人检测逻辑
         if 'Unknown' in names:  # alert
             if strangers_timing == 0:  # just start timing
-                strangers_timing = 1
+                strangers_timing = 2
                 strangers_start_time = time.time()
             else:  # already started timing
                 strangers_end_time = time.time()
@@ -202,7 +204,8 @@ while True:
         # 如果不是陌生人，且对象是老人
         if name != 'Unknown' and id_card_to_type[name] == 'old_people':
             # 表情检测逻辑
-            print("检测到老人，开始识别表情")
+            if(flag==1):
+                print("检测到老人，开始识别表情")
             roi = gray[top:bottom, left:right]
             roi = cv2.resize(roi, (FACIAL_EXPRESSION_TARGET_WIDTH,
                                    FACIAL_EXPRESSION_TARGET_HEIGHT))
@@ -211,8 +214,13 @@ while True:
             roi = np.expand_dims(roi, axis=0)
 
             # determine facial expression
-            (neural, smile) = facial_expression_model.predict(roi)[0]
-            facial_expression_label = 'Neural' if neural > smile else 'Smile'
+            (Disgust, neural, smile) = facial_expression_model.predict(roi)[0]
+            if max(Disgust, neural, smile)==Disgust:
+                facial_expression_label="Disgust"
+            elif max(Disgust, neural, smile)==neural:
+                facial_expression_label = "Neural"
+            else:
+                facial_expression_label = "Smile"
 
             if facial_expression_label == 'Smile':  # alert
                 if facial_expression_timing == 0:  # just start timing
@@ -226,14 +234,13 @@ while True:
                     if difference < facial_expression_limit_time:
                         print('[INFO] %s, 房间, %s仅笑了 %.1f 秒. 忽略' % (current_time, id_card_to_name[name], difference))
                     else:  # he/she is really smiling
-                        event_desc = '%s正在笑' % (id_card_to_name[name])
-                        event_location = '房间'
-                        print('[EVENT] %s, 房间, %s正在笑.' % (current_time, id_card_to_name[name]))
-                        cv2.imwrite(
-                            os.path.join(output_smile_path, 'snapshot_%s.jpg' % (time.strftime('%Y%m%d_%H%M%S'))),
-                            frame)
-
                         if (flag == 1):
+                            event_desc = '%s正在笑' % (id_card_to_name[name])
+                            event_location = '房间'
+                            print('[EVENT] %s, 房间, %s正在笑.' % (current_time, id_card_to_name[name]))
+                            cv2.imwrite(
+                                os.path.join(output_smile_path, 'snapshot_%s.jpg' % (time.strftime('%Y%m%d_%H%M%S'))),
+                                frame)
                             # sql语句
                             sql2 = (
                                         "insert into event_info(event_date,event_type,event_desc,event_location) value(now(),0,'%s正在笑','房间')" % (
@@ -246,12 +253,51 @@ while True:
                                 print('Failed')
                                 db.rollback()
                             flag = 0
+                            flag3=1
+            elif facial_expression_label == 'Disgust':  # alert
+                if facial_expression_timing == 0:  # just start timing
+                    facial_expression_timing = 1
+                    facial_expression_start_time = time.time()
+                else:  # already started timing
+                    facial_expression_end_time = time.time()
+                    difference = facial_expression_end_time - facial_expression_start_time
+
+                    current_time = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(time.time()))
+                    if difference < facial_expression_limit_time:
+                        print('[INFO] %s, 房间, %s仅生气了 %.1f 秒. 忽略' % (current_time, id_card_to_name[name], difference))
+                    else:  # he/she is really smiling
+
+
+                        if (flag3 == 1):
+                            # sql语句
+                            event_desc = '%s生气' % (id_card_to_name[name])
+                            event_location = '房间'
+                            print('[EVENT] %s, 房间, %s正在生气.' % (current_time, id_card_to_name[name]))
+                            cv2.imwrite(
+                                os.path.join(output_disgust_path, 'snapshot_%s.jpg' % (time.strftime('%Y%m%d_%H%M%S'))),
+                                frame)
+                            sql2 = (
+                                        "insert into event_info(event_date,event_type,event_desc,event_location) value(now(),0,'%s正在生气','房间')" % (
+                                    id_card_to_name[name]))
+                            try:
+                                cursor.execute(sql2)
+                                print('Successful')
+                                db.commit()
+                            except:
+                                print('Failed')
+                                db.rollback()
+                            flag3 = 0
+                            flag=1
             else:  # everything is ok
+                flag=1
+                flag3=1
                 facial_expression_timing = 0
+                strangers_timing == 0
 
         else:  # 如果是陌生人，则不检测表情
-            flag=1
             facial_expression_label = ''
+            flag2=1
+            strangers_timing == 0
 
     # 人脸识别和情感分析都结束后，把表情和人名写上
     # (同时处理中文显示问题)
