@@ -24,7 +24,7 @@ output_plot_path = 'plots/face_expression.png'
 # 全局常量
 TARGET_WIDTH = 28
 TARGET_HEIGHT = 28
-BATCH_SIZE = 64
+BATCH_SIZE = 10
 EPOCHS = 15
 LR_INIT = 0.01
 DECAY = LR_INIT / EPOCHS
@@ -43,7 +43,7 @@ data = data.astype("float") / 255.0
 
 # convert the labels from integers to vectors
 le = LabelEncoder().fit(labels)
-labels = to_categorical(le.transform(labels), 2)
+labels = to_categorical(le.transform(labels), 3)
 
 # account for skew in the labeled data
 classTotals = labels.sum(axis=0)
@@ -57,7 +57,7 @@ classWeight = classTotals.max() / classTotals
 # initialize the model
 print("[INFO] compiling model...")
 model = MiniVGGNet.build(width=TARGET_WIDTH,
-                         height=TARGET_HEIGHT, depth=1, classes=2)
+                         height=TARGET_HEIGHT, depth=1, classes=3)
 opt = SGD(lr=LR_INIT, decay=DECAY, momentum=MOMENTUM, nesterov=True)
 model.compile(loss="binary_crossentropy", optimizer=opt,
               metrics=["accuracy"])
