@@ -10,7 +10,7 @@ from keras.models import load_model
 from keras.datasets import mnist
 
 # global variables
-model_path = 'models/face.hdf5'
+model_path = 'models/face_expression.hdf5'
 
 model = load_model(model_path)
 

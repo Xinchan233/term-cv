@@ -21,7 +21,7 @@ class FaceUtil:
     # load embeddings
     def load_embeddings(self, encoding_file_path):
         # load the known faces and embeddings
-        print("[INFO] loading face encodings...")
+        #print("[INFO] loading face encodings...")
         self.data = pickle.loads(open(encoding_file_path, "rb").read())
 
     # face detection

@@ -24,7 +24,7 @@ from sklearn.model_selection import train_test_split
 # 全局常量
 LR = 0.0005
 BATCH_SIZE = 128
-EPOCHS = 20
+EPOCHS = 10
 
 TARGET_IMAGE_WIDTH = 48
 TARGET_IMAGE_HEIGHT = 48
@@ -32,7 +32,7 @@ TARGET_IMAGE_HEIGHT = 48
 # 全局变量
 accuracy_plot_path = 'plots/accuracy.png'
 loss_plot_path = 'plots/loss.png'
-output_model_path = 'models/face.hdf5'
+output_model_path = 'models/face_expression.hdf5'
 dataset_path = 'dataset'
 
 #initialize utils
@@ -74,11 +74,11 @@ print("[INFO] features matrix: {:.1f}MB"
 
 # Label encoder
 le = LabelEncoder()
-y = to_categorical(le.fit_transform(y), 2)
+y = to_categorical(le.fit_transform(y), 3)
 
 # 拆分数据集
 (X_train, X_test, y_train, y_test) = train_test_split(X, y,
-                                                      test_size=0.25,
+                                                      test_size=0.05,
                                                       random_state=42)
 
 
@@ -87,7 +87,7 @@ y = to_categorical(le.fit_transform(y), 2)
 # initialize the optimizer and model
 print('[INFO] 编译模型...')
 opt = RMSprop(lr = LR)
-model = LeNet.build(48,48,2,'',1)
+model = LeNet.build(48,48,3,'',1)
 model.compile(loss = 'categorical_crossentropy',
               optimizer=opt, metrics = ['accuracy'])
 

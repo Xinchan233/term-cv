@@ -9,11 +9,13 @@ import argparse
 from oldcare.facial import FaceUtil
 from oldcare.audio import audioplayer
 from PIL import Image, ImageDraw, ImageFont
-import cv2
 import numpy as np
+import cv2
 import os
 import shutil
 import time
+
+from oldcare.carema.carema import cam
 
 # 全局参数
 audio_dir = 'audios'
@@ -25,11 +27,17 @@ limit_time = 2  # 2 秒
 
 # 传入参数
 ap = argparse.ArgumentParser()
-ap.add_argument("-ic", "--id", required=True,
+ap.add_argument("-ic", "--id", required=False,
                 help="")
-ap.add_argument("-id", "--imagedir", required=True,
+ap.add_argument("-id", "--imagedir", required=False,
                 help="")
 args = vars(ap.parse_args())
+id = args['id']
+imagedir = args['imagedir']
+if not id:
+    id = '0'
+if not imagedir:
+    imagedir = 'images'
 
 action_list = ['blink', 'open_mouth', 'smile', 'rise_head', 'bow_head',
                'look_left', 'look_right']
@@ -38,9 +46,9 @@ action_map = {'blink': '请眨眼', 'open_mouth': '请张嘴',
               'bow_head': '请低头', 'look_left': '请看左边',
               'look_right': '请看右边'}
 # 设置摄像头
-cam = cv2.VideoCapture(0)
-cam.set(3, 640)  # set video widht
-cam.set(4, 480)  # set video height
+#cam = cv2.VideoCapture(0)
+#cam.set(3, 640)  # set video widht
+#cam.set(4, 480)  # set video height
 
 faceutil = FaceUtil()
 
@@ -94,20 +102,31 @@ while True:
         pass
 
 # 新建目录
-if os.path.exists(os.path.join(args['imagedir'], args['id'])):
-    shutil.rmtree(os.path.join(args['imagedir'], args['id']), True)
-os.mkdir(os.path.join(args['imagedir'], args['id']))
+if os.path.exists(os.path.join(imagedir, id)):
+    shutil.rmtree(os.path.join(imagedir, id), True)
+os.mkdir(os.path.join(imagedir, id))
 
 # 开始采集人脸
 for action in action_list:
-    audioplayer.play_audio(os.path.join(audio_dir, action + '.mp3'))
-    action_name = action_map[action]
+    child = audioplayer.play_audio(os.path.join(audio_dir, action + '.mp3'))
 
+    while(child.poll()==None):
+        print("Audio Playing")
+        ret, img_OpenCV = cam.read()
+        cv2.imshow('Collecting Faces', img_OpenCV)
+
+        # Press 'ESC' for exiting video
+        k = cv2.waitKey(100) & 0xff
+        if k == 27:
+            break
+
+
+    action_name = action_map[action]
     counter = 1
     for i in range(15):
         print('%s-%d' % (action_name, i))
         _, img_OpenCV = cam.read()
-        img_OpenCV = cv2.flip(img_OpenCV, 1)
+        #img_OpenCV = cv2.flip(img_OpenCV, 1)
         origin_img = img_OpenCV.copy()  # 保存时使用
 
         face_location_list = faceutil.get_face_location(img_OpenCV)
@@ -115,28 +134,28 @@ for action in action_list:
             cv2.rectangle(img_OpenCV, (left, top),
                           (right, bottom), (0, 0, 255), 2)
 
-        img_PIL = Image.fromarray(cv2.cvtColor(img_OpenCV,
-                                               cv2.COLOR_BGR2RGB))
+        img_PIL = Image.fromarray(cv2.cvtColor(img_OpenCV,cv2.COLOR_BGR2RGB))
 
         draw = ImageDraw.Draw(img_PIL)
+        #draw = ImageDraw.Draw(img_OpenCV)
         draw.text((int(image.shape[1] / 2), 30), action_name,
                   font=ImageFont.truetype('NotoSansCJK-Black.ttc', 40),
                   fill=(255, 0, 0))  # linux
 
         # 转换回OpenCV格式
-        img_OpenCV = cv2.cvtColor(np.asarray(img_PIL),
-                                  cv2.COLOR_RGB2BGR)
+        img_OpenCV = cv2.cvtColor(np.asarray(img_PIL),cv2.COLOR_RGB2BGR)
 
         cv2.imshow('Collecting Faces', img_OpenCV)  # show the image
 
-        image_name = os.path.join(args['imagedir'], args['id'],
-                                  action + '_' + str(counter) + '.jpg')
+        image_name = os.path.join(imagedir, id, action + '_' + str(counter) + '.jpg')
         cv2.imwrite(image_name, origin_img)
+        counter += 1
+
         # Press 'ESC' for exiting video
         k = cv2.waitKey(100) & 0xff
         if k == 27:
             break
-        counter += 1
+
 
 # 结束
 print('[INFO] 采集完毕')
