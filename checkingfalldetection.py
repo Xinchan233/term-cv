@@ -5,6 +5,9 @@
 用法：
 python checkingfalldetection.py
 python checkingfalldetection.py --filename tests/cam0.mp4
+
+恢复正常站立时候，重置摔倒插入（可以插入状态），但在插入前要持续几秒是fall的状态才可以插入
+
 '''
 
 # import the necessary packages
@@ -46,7 +49,7 @@ class fall:
 
     # 初始化摄像头
     if not input_video:
-        vs = cv2.VideoCapture(0)
+        vs = cv2.VideoCapture('rtmp://39.100.106.24:1935/stream/pupils_trace')
         time.sleep(2)
     else:
         vs = cv2.VideoCapture(input_video)
@@ -61,6 +64,11 @@ class fall:
         counter += 1
         # grab the current frame
         (grabbed, image) = vs.read()
+        vs.grab()
+        vs.grab()
+        vs.grab()
+        vs.grab()
+        vs.grab()
 
         # if we are viewing a video and we did not grab a frame, then we
         # have reached the end of the video
@@ -97,8 +105,14 @@ class fall:
                 if difference < fall_limit_time:
                     print('[INFO] %s, 走廊, 摔倒仅出现 %.1f 秒. 忽略.'
                           % (current_time, difference))
-                else:  # strangers appear
+                else:
                     if (flag == 1):
+                        img_name = 'snapshot_%s.jpg' % (time.strftime('%Y%m%d_%H%M%S'))
+                        cv2.imwrite(os.path.join(output_fall_path,
+                                                 img_name), image)
+                        path = output_fall_path + "/" + img_name
+                        myimg = open(path, 'rb')
+                        img_data = myimg.read()
                         audioplayer.play_audio(os.path.join('audios/fall.mp3'))
                         curr_time = datetime.datetime.now()
                         db = pymysql.connect(host='123.57.246.9', user='root', password='199918', port=3306, db='oldcare')
@@ -106,7 +120,8 @@ class fall:
                         # sql语句
                         sql = "insert into event_info(event_date,event_type,event_desc,event_location) value(now(),3,'有人摔倒!!!','走廊')"
                         try:
-                            cursor.execute(sql)
+                            cursor.execute("insert into event_info(event_date,event_type,event_desc,event_location,image) value(now(),3,'有人摔倒!!!','走廊',%s)",(img_data)
+                        )
                             print('Successful')
                             db.commit()
                         except:
@@ -116,9 +131,7 @@ class fall:
                         db.close()
                         flag = 0
                         print('[EVENT] %s, 走廊, 有人摔倒!!!' % (current_time))
-                        cv2.imwrite(os.path.join(output_fall_path,
-                                                 'snapshot_%s.jpg'
-                                                 % (time.strftime('%Y%m%d_%H%M%S'))), image)
+
         else:#normal,restart 识别
             flag=1
             fall_timing=0

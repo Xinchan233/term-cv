@@ -4,6 +4,7 @@
 用法：
 python checkingstrangersandfacialexpression.py
 python checkingstrangersandfacialexpression.py --filename tests/room_01.mp4
+三种表情，转换到a表情时候，bc恢复可插入状态，bc同理，stranger得长时间识别才可以
 '''
 
 # 导入包
@@ -35,7 +36,7 @@ ap.add_argument("-f", "--filename", required=False, default='',
 args = vars(ap.parse_args())
 input_video = args['filename']
 db = pymysql.connect(host='123.57.246.9', user='root', password='199918', port=3306,
-                     db='oldcare')
+                     db='oldcare', charset='utf8')
 cursor = db.cursor()
 # 全局变量
 facial_recognition_model_path = 'models/face_recognition_hog.pickle'
@@ -43,7 +44,7 @@ facial_expression_model_path = 'models/face_expression.hdf5'
 
 output_stranger_path = 'supervision/strangers'
 output_smile_path = 'supervision/smile'
-output_disgust_path='supervision/disgust'
+output_disgust_path = 'supervision/disgust'
 
 people_info_path = 'info/people_info.csv'
 facial_expression_info_path = 'info/facial_expression_info.csv'
@@ -54,8 +55,8 @@ python_path = '/home/guojiahua/anaconda3/envs/tensorflow/bin/python3.6'
 FACIAL_EXPRESSION_TARGET_WIDTH = 28
 FACIAL_EXPRESSION_TARGET_HEIGHT = 28
 
-VIDEO_WIDTH = 640
-VIDEO_HEIGHT = 480
+VIDEO_WIDTH = 160
+VIDEO_HEIGHT = 120
 
 ANGLE = 20
 
@@ -78,7 +79,7 @@ facial_expression_limit_time = 2  # if >= 2 seconds, he/she is smiling
 
 # 初始化摄像头
 if not input_video:
-    vs = cv2.VideoCapture(0)
+    vs = cv2.VideoCapture('rtmp://39.100.106.24:1935/stream/pupils_trace')
     time.sleep(2)
 else:
     vs = cv2.VideoCapture(input_video)
@@ -92,11 +93,16 @@ print('[INFO] 开始检测陌生人和表情...')
 counter = 0
 flag = 1
 flag2 = 1
-flag3=1
+flag3 = 1
 while True:
     counter += 1
     # grab the current frame
     (grabbed, frame) = vs.read()
+    vs.grab()
+    vs.grab()
+    vs.grab()
+    vs.grab()
+    vs.grab()
 
     # if we are viewing a video and we did not grab a frame, then we
     # have reached the end of the video
@@ -161,22 +167,29 @@ while True:
                     event_location = '房间'
                     print('[EVENT] %s, 房间, 陌生人出现!!!'
                           % (current_time))
+                    img_name = 'snapshot_%s.jpg' % (time.strftime('%Y%m%d_%H%M%S'))
                     cv2.imwrite(os.path.join(output_stranger_path,
-                                             'snapshot_%s.jpg'
-                                             % (time.strftime('%Y%m%d_%H%M%S'))), frame)
+                                             img_name), frame)
+                    path = output_stranger_path + "/" + img_name
+                    myimg = open(path, 'rb')
+                    img_data = myimg.read()
 
                     if (flag2 == 1):
 
                         # sql语句
                         sql = "insert into event_info(event_date,event_type,event_desc,event_location) value(now(),2,'陌生人出现!!!','房间')"
                         try:
-                            cursor.execute(sql)
+                            cursor.execute(
+                                "insert into event_info(event_date,event_type,event_desc,event_location,image) value(now(),2,'陌生人出现!!!','房间',%s)",
+                                (img_data)
+                            )
                             print('Successful')
                             db.commit()
                         except:
                             print('Failed')
                             db.rollback()
                         flag2 = 0
+                        strangers_timing = 0
 
             # 开始陌生人追踪
             unknown_face_center = (int((right + left) / 2),
@@ -198,13 +211,13 @@ while True:
                 print('%d-摄像头需要 turn %s %d 度' % (counter, direction, ANGLE))
         else:  # everything is ok
             strangers_timing = 0
-            flag2=1
+            flag2 = 1
 
         # 表情检测逻辑
         # 如果不是陌生人，且对象是老人
         if name != 'Unknown' and id_card_to_type[name] == 'old_people':
             # 表情检测逻辑
-            if(flag==1):
+            if (flag == 1):
                 print("检测到老人，开始识别表情")
             roi = gray[top:bottom, left:right]
             roi = cv2.resize(roi, (FACIAL_EXPRESSION_TARGET_WIDTH,
@@ -215,9 +228,9 @@ while True:
 
             # determine facial expression
             (Disgust, neural, smile) = facial_expression_model.predict(roi)[0]
-            if max(Disgust, neural, smile)==Disgust:
-                facial_expression_label="Disgust"
-            elif max(Disgust, neural, smile)==neural:
+            if max(Disgust, neural, smile) == Disgust:
+                facial_expression_label = "Disgust"
+            elif max(Disgust, neural, smile) == neural:
                 facial_expression_label = "Neural"
             else:
                 facial_expression_label = "Smile"
@@ -235,25 +248,35 @@ while True:
                         print('[INFO] %s, 房间, %s仅笑了 %.1f 秒. 忽略' % (current_time, id_card_to_name[name], difference))
                     else:  # he/she is really smiling
                         if (flag == 1):
+
                             event_desc = '%s正在笑' % (id_card_to_name[name])
                             event_location = '房间'
                             print('[EVENT] %s, 房间, %s正在笑.' % (current_time, id_card_to_name[name]))
-                            cv2.imwrite(
-                                os.path.join(output_smile_path, 'snapshot_%s.jpg' % (time.strftime('%Y%m%d_%H%M%S'))),
-                                frame)
-                            # sql语句
-                            sql2 = (
-                                        "insert into event_info(event_date,event_type,event_desc,event_location) value(now(),0,'%s正在笑','房间')" % (
-                                    id_card_to_name[name]))
+
+                            img_name = 'snapshot_%s.jpg' % (time.strftime('%Y%m%d_%H%M%S'))
+                            cv2.imwrite(os.path.join(output_smile_path,
+                                                     img_name), frame)
+                            path2 = output_smile_path + "/" + img_name
+                            print(path2)
+                            myimg2 = open(path2, 'rb')
+                            img_data2 = myimg2.read()
+                            print(len(img_data2))
+                            name = id_card_to_name.get(name)
                             try:
-                                cursor.execute(sql2)
+                                cursor.execute(
+                                    "insert into event_info(event_date,event_type,event_desc,event_location,oldperson_name,image) value(now(),0,'老人正在笑气','房间',%s,%s)",
+                                    (name, img_data2)
+                                )
+
                                 print('Successful')
                                 db.commit()
-                            except:
+                            except IOError as e:
                                 print('Failed')
+                                print("Error %d %s" % (e.args[0], e.args[1]))
                                 db.rollback()
+
                             flag = 0
-                            flag3=1
+                            flag3 = 1
             elif facial_expression_label == 'Disgust':  # alert
                 if facial_expression_timing == 0:  # just start timing
                     facial_expression_timing = 1
@@ -267,36 +290,42 @@ while True:
                         print('[INFO] %s, 房间, %s仅生气了 %.1f 秒. 忽略' % (current_time, id_card_to_name[name], difference))
                     else:  # he/she is really smiling
 
-
                         if (flag3 == 1):
                             # sql语句
                             event_desc = '%s生气' % (id_card_to_name[name])
                             event_location = '房间'
                             print('[EVENT] %s, 房间, %s正在生气.' % (current_time, id_card_to_name[name]))
-                            cv2.imwrite(
-                                os.path.join(output_disgust_path, 'snapshot_%s.jpg' % (time.strftime('%Y%m%d_%H%M%S'))),
-                                frame)
-                            sql2 = (
-                                        "insert into event_info(event_date,event_type,event_desc,event_location) value(now(),0,'%s正在生气','房间')" % (
-                                    id_card_to_name[name]))
+
+                            img_name = 'snapshot_%s.jpg' % (time.strftime('%Y%m%d_%H%M%S'))
+                            cv2.imwrite(os.path.join(output_disgust_path,
+                                                     img_name), frame)
+                            path3 = output_disgust_path + "/" + img_name
+                            print(path3)
+                            myimg3 = open(path3, 'rb')
+                            img_data3 = myimg3.read()
+                            print(len(img_data3))
+                            name=id_card_to_name.get(name)
                             try:
-                                cursor.execute(sql2)
+                                cursor.execute(
+                                    "insert into event_info(event_date,event_type,event_desc,event_location,oldperson_name,image) value(now(),0,'老人正在生气','房间',%s,%s)",
+                                    (name,img_data3)
+                                )
                                 print('Successful')
                                 db.commit()
                             except:
                                 print('Failed')
                                 db.rollback()
                             flag3 = 0
-                            flag=1
+                            flag = 1
             else:  # everything is ok
-                flag=1
-                flag3=1
+                flag = 1
+                flag3 = 1
                 facial_expression_timing = 0
                 strangers_timing == 0
 
         else:  # 如果是陌生人，则不检测表情
             facial_expression_label = ''
-            flag2=1
+            flag2 = 1
             strangers_timing == 0
 
     # 人脸识别和情感分析都结束后，把表情和人名写上

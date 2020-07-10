@@ -54,7 +54,7 @@ class MiniVGGNet:
 
         # softmax classifier
         model.add(Dense(classes))
-        model.add(Activation("softmax"))
+        model.add(Activation("sigmoid"))
 
         # return the constructed network architecture
         return model

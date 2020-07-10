@@ -7,11 +7,12 @@
 用法：
 python checkingfence.py
 python checkingfence.py --filename tests/fence.mp4
+当没有物体的时候，重新恢复可插入状态，持续几秒方可插入
 '''
 
 # import the necessary packages
 import pymysql
-
+from testdb import img_read_store
 from oldcare.track import CentroidTracker
 from oldcare.track import TrackableObject
 from imutils.video import FPS
@@ -24,15 +25,17 @@ from oldcare.audio import audioplayer
 import cv2
 import os
 import subprocess
+
+
 class fence:
     # 得到当前时间
     fall_timing = 0  # 计时开始
     fall_start_time = 0  # 开始时间
-    fall_limit_time=2
+    fall_limit_time = 2
     current_time = time.strftime('%Y-%m-%d %H:%M:%S',
                                  time.localtime(time.time()))
     print('[INFO] %s 禁止区域检测程序启动了.' % (current_time))
-    flag=1
+    flag = 1
     # 传入参数
     ap = argparse.ArgumentParser()
     ap.add_argument("-f", "--filename", required=False, default='',
@@ -65,7 +68,7 @@ class fence:
     # if a video path was not supplied, grab a reference to the webcam
     if not input_video:
         print("[INFO] starting video stream...")
-        vs = cv2.VideoCapture(0)
+        vs = cv2.VideoCapture('rtmp://39.100.106.24:1935/stream/pupils_trace')
         time.sleep(2)
     else:
         print("[INFO] opening video file...")
@@ -101,6 +104,11 @@ class fence:
         # grab the next frame and handle if we are reading from either
         # VideoCapture or VideoStream
         ret, frame = vs.read()
+        vs.grab()
+        vs.grab()
+        vs.grab()
+        vs.grab()
+        vs.grab()
 
         # if we are viewing a video and we did not grab a frame then we
         # have reached the end of the video
@@ -226,22 +234,23 @@ class fence:
                     print('[INFO] %s, 院子, people仅出现 %.1f 秒. 忽略.'
                           % (current_time, difference))
                 else:  # strangers appear
-                    if(flag==1):
+                    if (flag == 1):
                         current_time = time.strftime('%Y-%m-%d %H:%M:%S',
                                                      time.localtime(time.time()))
                         audioplayer.play_audio(os.path.join('audios/off-limits-area.mp3'))
                         print('[EVENT] %s, 院子, 有人闯入禁止区域!!!'
                               % (current_time))
+                        img_name = 'snapshot_%s.jpg' % (time.strftime('%Y%m%d_%H%M%S'))
                         cv2.imwrite(os.path.join(output_fence_path,
-                                                 'snapshot_%s.jpg'
-                                                 % (time.strftime('%Y%m%d_%H%M%S'))), frame)
+                                                 img_name), frame)
+                        path=output_fence_path + "/" + img_name
+                        myimg = open(path, 'rb')
+                        img_data = myimg.read()
                         db = pymysql.connect(host='123.57.246.9', user='root', password='199918', port=3306,
-                                             db='oldcare')
+                                             db='oldcare', charset='utf8')
                         cursor = db.cursor()
-                        # sql语句
-                        sql = "insert into event_info(event_date,event_type,event_desc,event_location) value(now(),4,'有人闯入禁止区域!!!','院子')"
                         try:
-                            cursor.execute(sql)
+                            cursor.execute("insert into event_info(event_date,event_type,event_desc,event_location,image) values(now(),4,'有人闯入禁止区域!!!','院子', %s)",(img_data))
                             print('Successful')
                             db.commit()
                         except:
@@ -249,12 +258,12 @@ class fence:
                             db.rollback()
                         cursor.close()
                         db.close()
-                        flag=0
+                        flag = 0
 
             # if there is no existing trackable object, create one
             if to is None:
                 to = TrackableObject(objectID, centroid)
-                flag=1
+                flag = 1
 
             # otherwise, there is a trackable object so we can utilize it
             # to determine direction
@@ -282,7 +291,6 @@ class fence:
                     elif direction > 0 and centroid[1] > H // 2:
                         totalDown += 1
                         to.counted = True
-
 
             # store the trackable object in our dictionary
             trackableObjects[objectID] = to
