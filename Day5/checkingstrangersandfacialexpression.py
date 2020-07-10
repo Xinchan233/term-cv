@@ -46,8 +46,8 @@ facial_expression_info_path = 'info/facial_expression_info.csv'
 python_path ='/home/guojiahua/anaconda3/envs/tensorflow/bin/python3.6'
 
 # 全局常量
-FACIAL_EXPRESSION_TARGET_WIDTH = 48
-FACIAL_EXPRESSION_TARGET_HEIGHT = 48
+FACIAL_EXPRESSION_TARGET_WIDTH = 28
+FACIAL_EXPRESSION_TARGET_HEIGHT = 28
 
 VIDEO_WIDTH = 640
 VIDEO_HEIGHT = 480
@@ -224,18 +224,18 @@ while True:
         else:  # 如果是陌生人，则不检测表情
             facial_expression_label = ''
 
-    # 人脸识别和情感分析都结束后，把表情和人名写上
-    # (同时处理中文显示问题)
-    img_PIL = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+        # 人脸识别和情感分析都结束后，把表情和人名写上
+        # (同时处理中文显示问题)
+        img_PIL = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
 
-    draw = ImageDraw.Draw(img_PIL)
-    final_label = id_card_to_name[name] + ': ' + facial_expression_id_to_name[facial_expression_label] if facial_expression_label else id_card_to_name[name]
-    draw.text((left, top - 30), final_label,
-          font=ImageFont.truetype('NotoSansCJK-Black.ttc', 40),
-          fill=(255, 0, 0))  # linux
+        draw = ImageDraw.Draw(img_PIL)
+        final_label = id_card_to_name[name] + ': ' + facial_expression_id_to_name[facial_expression_label] if facial_expression_label else id_card_to_name[name]
+        draw.text((left, top - 30), final_label,
+            font=ImageFont.truetype('NotoSansCJK-Black.ttc', 40),
+            fill=(255, 0, 0))  # linux
 
-    # 转换回OpenCV格式
-    frame = cv2.cvtColor(np.asarray(img_PIL), cv2.COLOR_RGB2BGR)
+        # 转换回OpenCV格式
+        frame = cv2.cvtColor(np.asarray(img_PIL), cv2.COLOR_RGB2BGR)
 
     # show our detected faces along with smiling/not smiling labels
     cv2.imshow("Checking Strangers and Ole People's Face Expression", frame)
